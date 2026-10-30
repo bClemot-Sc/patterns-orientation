@@ -148,7 +148,7 @@ class LightCircleEditor(tk.Tk):
     @property
     def n_slots(self):
         try:
-            return max(2, min(64, int(self._slot_str.get())))
+            return max(2, min(256, int(self._slot_str.get())))
         except ValueError:
             return 12
 
@@ -268,8 +268,15 @@ class LightCircleEditor(tk.Tk):
         self._redraw_distributions()
         self._update_status()
 
+    def _dot_r(self, n):
+        """Slot dot radius that shrinks gracefully as slot count increases."""
+        cr = self.circle_r
+        arc = 2 * math.pi * cr / n
+        return max(3, min(DOT_R, int(arc * 0.40)))
+
     def _draw_circle_ring(self, cx, cy, n, side):
         cr = self.circle_r
+        dot_r = self._dot_r(n)
 
         for r_extra, color in [(22, "#0a1f14"), (14, "#0d2e1c"), (7, "#134d2e")]:
             self.canvas.create_oval(cx - cr - r_extra, cy - cr - r_extra,
@@ -287,12 +294,13 @@ class LightCircleEditor(tk.Tk):
             sy = cy + cr * math.sin(sa)
 
             slot_id = self.canvas.create_oval(
-                sx - DOT_R, sy - DOT_R, sx + DOT_R, sy + DOT_R,
+                sx - dot_r, sy - dot_r, sx + dot_r, sy + dot_r,
                 fill=SLOT_OFF, outline=SLOT_RIM, width=1,
                 tags=(f"slot_{side}_{i}",))
 
             entry = {"id": slot_id, "x": sx, "y": sy, "cx": cx, "cy": cy,
-                     "intensity": 0, "side": side, "index": i, "screen_angle": sa}
+                     "intensity": 0, "side": side, "index": i, "screen_angle": sa,
+                     "dot_r": dot_r}
             self.circles.append(entry)
 
             self.canvas.tag_bind(slot_id, "<Button-1>",
@@ -574,6 +582,7 @@ class LightCircleEditor(tk.Tk):
     # ------------------------------------------------------------------
     def _paint_slot(self, entry):
         iv  = entry["intensity"]
+        dot_r = entry.get("dot_r", DOT_R)
         tag = f"glow_{entry['side']}_{entry['index']}"
         self.canvas.delete(tag)
         if iv == 0:
@@ -586,9 +595,10 @@ class LightCircleEditor(tk.Tk):
                                    fill=f"#00{g:02x}{b:02x}",
                                    outline=ACCENT if brightness > 0.7 else ACCENT_DIM,
                                    width=2)
-            self.canvas.create_text(entry["x"], entry["y"] - DOT_R - 7,
-                                    text=str(iv), font=("Courier New", 7),
-                                    fill=ACCENT, tags=(tag,))
+            if dot_r >= 7:   # only draw label when dots are large enough to read
+                self.canvas.create_text(entry["x"], entry["y"] - dot_r - 7,
+                                        text=str(iv), font=("Courier New", 7),
+                                        fill=ACCENT, tags=(tag,))
 
     def _update_status(self):
         active = sum(1 for c in self.circles if c["intensity"] > 0)
